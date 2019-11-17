@@ -77,7 +77,7 @@ async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, 
         }
 
         let target_url = target_url.to_string();
-        if target_url.ends_with(".deb") {
+        if target_url.ends_with(".deb") || target_url.ends_with(".ddeb") {
             rv.push(Link::Deb(target_url));
         } else if target_url.ends_with('/') {
             rv.push(Link::Listing(target_url));
