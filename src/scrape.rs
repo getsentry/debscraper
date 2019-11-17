@@ -1,12 +1,14 @@
 use tokio::prelude::*;
 
+use std::mem;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 use reqwest;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::Mutex;
 use url::Url;
@@ -132,5 +134,6 @@ pub async fn scrape_debian_packages(
         started.elapsed().as_secs()
     );
 
-    Ok(vec![])
+    let mut archives = archives.lock().await;
+    Ok(mem::replace(&mut *archives, Default::default()))
 }
