@@ -18,6 +18,22 @@ lazy_static! {
     static ref LINK_RE: Regex = Regex::new(r#"(?i)\bhref="([^"]+)"#).unwrap();
 }
 
+macro_rules! log_stage {
+    ($num:expr, $($arg:expr),*) => {
+        println!(
+            "[{}] {}",
+            style($num).cyan().bold(),
+            format_args!($($arg,)*),
+        );
+    }
+}
+
+macro_rules! log_result {
+    ($($arg:expr),*) => {
+        println!("--> {}", format_args!($($arg,)*));
+    }
+}
+
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
@@ -72,12 +88,19 @@ async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, 
 }
 
 /// Scrapes a list of URLs for all reachable debian packages.
-async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
-    println!(
-        "[{}] Fetching archive index ({})",
-        style("1").cyan().bold(),
-        style(&url).green()
-    );
+async fn scrape_debian_packages(pool: &pool::ClientPool, urls: impl IntoIterator<Item=String>) -> Result<Vec<String>, Error> {
+    let mut sources = String::new();
+    let (mut tx, mut rx) = unbounded_channel();
+    for (idx, url) in urls.into_iter().enumerate() {
+        use std::fmt::Write;
+        if idx > 0 {
+            sources.push_str(", ");
+        }
+        write!(&mut sources, "{}", style(&url).green())?;
+        tx.try_send(url)?;
+    }
+
+    log_stage!(1, "Fetching archive indexes ({})", sources);
 
     let archives = Arc::new(Mutex::new(vec![]));
     let pb = ProgressBar::new_spinner();
@@ -86,12 +109,7 @@ async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
     );
     pb.enable_steady_tick(100);
 
-    let (mut tx, mut rx) = unbounded_channel();
-    tx.try_send(url)?;
-
     let started = Instant::now();
-    let pool = pool::ClientPool::new(128);
-
     loop {
         let new_item = rx.recv().timeout(Duration::from_millis(100)).await;
         let index_url = match new_item {
@@ -135,8 +153,8 @@ async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
     }
 
     pb.finish_and_clear();
-    println!(
-        "    --> Found {} archives in {}s",
+    log_result!(
+        "Found {} archives in {}s",
         style(archives.lock().await.len()).yellow(),
         started.elapsed().as_secs()
     );
@@ -146,10 +164,12 @@ async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    //"http://archive.ubuntu.com/ubuntu/pool/main/a/a11y-profile-manager".to_string(),
-    //"http://archive.ubuntu.com/ubuntu/pool/".to_string(),
-    //"http://ddebs.ubuntu.com/ubuntu/pool/".to_string(),
+    let urls = vec![
+        "http://archive.ubuntu.com/ubuntu/pool/".to_string(),
+        "http://ddebs.ubuntu.com/ubuntu/pool/".to_string(),
+    ];
+    let pool = pool::ClientPool::new(256);
     let _result =
-        scrape_debian_packages("http://archive.ubuntu.com/ubuntu/pool/main/".to_string()).await?;
+        scrape_debian_packages(&pool, urls).await?;
     Ok(())
 }
