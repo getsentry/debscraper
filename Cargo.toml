@@ -10,10 +10,10 @@ edition = "2018"
 url = "2.1.0"
 regex = "1.3.1"
 lazy_static = "1.4.0"
-surf = "1.0.3"
-async-std = { version = "1.0.1", features = ["unstable"] }
-futures = "0.3.1"
 indicatif = "0.13.0"
 console = "0.9.1"
 tokio = "0.2.0-alpha.6"
 futures-intrusive = "0.2.2"
+futures = "0.3.1"
+reqwest = "0.10.0-alpha.2"
+bb8 = { git = "https://github.com/djc/bb8", branch = "async-await" }

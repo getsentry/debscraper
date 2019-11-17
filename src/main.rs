@@ -1,15 +1,18 @@
-use async_std::sync::{Arc, Mutex};
-use async_std::future::timeout;
-use async_std::task;
+use tokio::prelude::*;
+
 use console::style;
-use std::time::{Instant, Duration};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
+use reqwest;
 use std::future::Future;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::unbounded_channel;
-use futures_intrusive::sync::Semaphore;
+use tokio::sync::Mutex;
 use url::Url;
+
+mod pool;
 
 lazy_static! {
     static ref LINK_RE: Regex = Regex::new(r#"(?i)\bhref="([^"]+)"#).unwrap();
@@ -23,26 +26,22 @@ enum Link {
     Deb(String),
 }
 
-fn spawn_protected<F>(future: F) -> task::JoinHandle<()>
+fn spawn_protected<F>(future: F)
 where
     F: Future<Output = Result<(), Error>> + Send + 'static,
 {
-    task::spawn(async move {
+    tokio::spawn(async move {
         match future.await {
-            Ok(()) => (),
-            // XXX: log here
-            Err(err) => {
-                eprintln!("error: {}", err);
-            }
+            Ok(()) => {}
+            Err(err) => panic!("error: {}", err),
         }
-    })
+    });
 }
 
 /// Given a URL returns a vector of all links that could be followed.
-async fn find_links(url: String) -> Result<Vec<Link>, Error> {
+async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, Error> {
     let base_url = Url::parse(&url)?;
-    let mut resp = surf::get(url).await?;
-    let body = resp.body_bytes().await?;
+    let body = client.get(&url).send().await?.bytes().await?;
     let mut rv = vec![];
 
     for m in LINK_RE.captures_iter(&body) {
@@ -91,29 +90,29 @@ async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
     tx.try_send(url)?;
 
     let started = Instant::now();
-    let concurrency = 32;
-    let semaphore = Arc::new(Semaphore::new(true, concurrency));
+    let pool = pool::ClientPool::new(128);
+
     loop {
-        let semaphore = semaphore.clone();
-        let new_item = timeout(Duration::from_millis(100), rx.recv()).await;
+        let new_item = rx.recv().timeout(Duration::from_millis(100)).await;
         let index_url = match new_item {
             Ok(Some(index_url)) => index_url,
             Ok(None) => break,
             Err(_) => {
-                if semaphore.permits() == concurrency {
+                if pool.is_full() {
                     break;
                 } else {
                     continue;
                 }
             }
         };
-        semaphore.acquire(1).await.disarm();
+        let client = pool.get_client().await;
         let archives = archives.clone();
         let pb = pb.clone();
         let mut tx = tx.clone();
         spawn_protected(async move {
+            let client = client;
             let archives = archives.clone();
-            let links = find_links(index_url.clone()).await?;
+            let links = find_links(&client, index_url.clone()).await?;
             let mut new_archives = vec![];
             for link in links {
                 match link {
@@ -130,24 +129,27 @@ async fn scrape_debian_packages(url: String) -> Result<Vec<String>, Error> {
                 style(archives.len()).yellow(),
             ));
             archives.extend(new_archives);
-            semaphore.release(1);
+            client.release().await;
             Ok(())
         });
     }
 
-    pb.finish_with_message(&format!("finished scraping in {}s", started.elapsed().as_secs()));
+    pb.finish_and_clear();
+    println!(
+        "    --> Found {} archives in {}s",
+        style(archives.lock().await.len()).yellow(),
+        started.elapsed().as_secs()
+    );
 
     Ok(vec![])
 }
 
-fn main() {
-    task::block_on(async {
-        //"http://archive.ubuntu.com/ubuntu/pool/main/a/a11y-profile-manager".to_string(),
-        //"http://archive.ubuntu.com/ubuntu/pool/".to_string(),
-        //"http://ddebs.ubuntu.com/ubuntu/pool/".to_string(),
-        let result =
-            scrape_debian_packages("http://archive.ubuntu.com/ubuntu/pool/main/".to_string())
-                .await
-                .unwrap();
-    });
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    //"http://archive.ubuntu.com/ubuntu/pool/main/a/a11y-profile-manager".to_string(),
+    //"http://archive.ubuntu.com/ubuntu/pool/".to_string(),
+    //"http://ddebs.ubuntu.com/ubuntu/pool/".to_string(),
+    let _result =
+        scrape_debian_packages("http://archive.ubuntu.com/ubuntu/pool/main/".to_string()).await?;
+    Ok(())
 }
