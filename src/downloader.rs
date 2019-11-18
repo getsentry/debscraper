@@ -101,7 +101,7 @@ pub async fn download_packages(
             let debian_data = unar(&f.path()).await?;
             let archive_contents = unpack_data(debian_data.path()).await?;
             sort_images(archive_contents.path(), &output, &prefix, &key).await?;
-            client.release().await;
+            drop(client);
             fs::write(&ref_file, "")?;
             Ok(())
         });

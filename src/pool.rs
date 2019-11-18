@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_intrusive::sync::Semaphore;
@@ -9,6 +9,10 @@ use tokio::{clock, timer};
 
 struct ClientPoolInner {
     semaphore: Semaphore,
+    // we use an actual mutex here so that we can release on drop
+    // without having to spawn a task.  This is easier to work with
+    // and should be okay since we always wait the semaphore first
+    // on acquire anyways.
     clients: Mutex<Vec<Option<Client>>>,
 }
 
@@ -30,9 +34,9 @@ impl Deref for ClientRef {
     }
 }
 
-impl ClientRef {
-    pub async fn release(mut self) {
-        for slot in self.inner.clients.lock().await.iter_mut() {
+impl Drop for ClientRef {
+    fn drop(&mut self) {
+        for slot in self.inner.clients.lock().unwrap().iter_mut() {
             if slot.is_none() {
                 *slot = self.client.take();
             }
@@ -67,7 +71,7 @@ impl ClientPool {
 
     pub async fn get_client(&self) -> ClientRef {
         self.inner.semaphore.acquire(1).await.disarm();
-        let mut clients = self.inner.clients.lock().await;
+        let mut clients = self.inner.clients.lock().unwrap();
 
         // reuse an existing connection
         for slot in clients.iter_mut() {

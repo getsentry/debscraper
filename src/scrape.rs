@@ -123,7 +123,7 @@ pub async fn scrape_debian_packages(
                 style(archives.len()).yellow(),
             ));
             archives.extend(new_archives);
-            client.release().await;
+            drop(client);
             Ok(())
         });
     }
