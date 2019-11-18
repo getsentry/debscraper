@@ -1,8 +1,8 @@
 use std::fs;
 use std::io;
-use std::sync::Arc;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 
 use console::style;
 use reqwest::Client;
@@ -10,11 +10,11 @@ use sha1::Sha1;
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::pool::ClientPool;
-use crate::utils::{spawn_protected, Error};
+use crate::utils::{fetch_url, spawn_protected, Error};
 
 async fn download_archive(client: &Client, url: String) -> Result<NamedTempFile, Error> {
     let f = NamedTempFile::new()?;
-    let body = client.get(&url).send().await?.bytes().await?;
+    let body = fetch_url(client, &url).await?;
     fs::write(f.path(), body)?;
     Ok(f)
 }
@@ -52,7 +52,12 @@ async fn unpack_data(ar_contents: &Path) -> Result<TempDir, Error> {
     Ok(dir)
 }
 
-async fn sort_images(input: &Path, output: &Path, prefix: &str, bundle_id: &str) -> Result<(), Error> {
+async fn sort_images(
+    input: &Path,
+    output: &Path,
+    prefix: &str,
+    bundle_id: &str,
+) -> Result<(), Error> {
     let _status = Command::new("symsorter")
         .arg("--bundle-id")
         .arg(bundle_id)
@@ -100,7 +105,6 @@ pub async fn download_packages(
             fs::write(&ref_file, "")?;
             Ok(())
         });
-
     }
 
     pool.join().await;

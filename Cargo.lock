@@ -227,6 +227,7 @@ name = "debscraper"
 version = "0.1.0"
 dependencies = [
  "bb8 0.3.2-pre (git+https://github.com/djc/bb8?branch=async-await)",
+ "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-intrusive 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",

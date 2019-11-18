@@ -20,6 +20,7 @@ bb8 = { git = "https://github.com/djc/bb8", branch = "async-await" }
 structopt = "0.3.4"
 sha1 = "0.6.0"
 tempfile = "3.1.0"
+bytes = "0.4.12"
 
 [profile.release]
 panic = "abort"

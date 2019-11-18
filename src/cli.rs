@@ -3,13 +3,16 @@ use std::path::PathBuf;
 use console::style;
 use structopt::StructOpt;
 
-use crate::pool::ClientPool;
-use crate::utils::Error;
-use crate::scrape::scrape_debian_packages;
 use crate::downloader::download_packages;
+use crate::pool::ClientPool;
+use crate::scrape::scrape_debian_packages;
+use crate::utils::Error;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "debscraper", about = "Scrapes debug images from debian servers.")]
+#[structopt(
+    name = "debscraper",
+    about = "Scrapes debug images from debian servers."
+)]
 struct Opt {
     /// Server URLs to pool directories.
     #[structopt(short = "u", long = "pool-url")]
@@ -43,8 +46,14 @@ pub async fn main() -> Result<(), Error> {
     // well known urls:
     // - http://archive.ubuntu.com/ubuntu/pool/
     // - http://ddebs.ubuntu.com/ubuntu/pool/
-    println!("scraping-concurrency: {}", style(opt.scraping_concurrency).yellow());
-    println!("downloading-concurrency: {}", style(opt.downloading_concurrency).yellow());
+    println!(
+        "scraping-concurrency: {}",
+        style(opt.scraping_concurrency).yellow()
+    );
+    println!(
+        "downloading-concurrency: {}",
+        style(opt.downloading_concurrency).yellow()
+    );
     println!("prefix: {}", style(&opt.prefix).yellow());
     println!("output: {}", style(&opt.output.display()).yellow());
     println!();
@@ -56,6 +65,6 @@ pub async fn main() -> Result<(), Error> {
     let pool = ClientPool::new(opt.downloading_concurrency);
     download_packages(&pool, packages, &opt.output, &opt.prefix).await?;
     drop(pool);
-    
+
     Ok(())
 }

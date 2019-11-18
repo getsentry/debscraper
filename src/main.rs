@@ -1,11 +1,11 @@
 #[macro_use]
 mod macros;
 
-mod scrape;
-mod pool;
 mod cli;
-mod utils;
 mod downloader;
+mod pool;
+mod scrape;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), utils::Error> {
