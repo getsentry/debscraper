@@ -24,7 +24,7 @@ pub async fn fetch_url(client: &Client, url: &str) -> Result<Bytes, Error> {
     let mut last_error = None;
     loop {
         attempts += 1;
-        if attempts >= 3 {
+        if attempts >= 6 {
             return Err(last_error.unwrap());
         }
 
