@@ -15,9 +15,13 @@ struct Opt {
     #[structopt(short = "u", long = "pool-url")]
     urls: Vec<String>,
 
-    /// Number of concurrent connections.
-    #[structopt(short = "c", long = "concurrency", default_value = "128")]
-    concurrency: usize,
+    /// Number of concurrent connections for scraping.
+    #[structopt(long = "scraping-concurrency", default_value = "128")]
+    scraping_concurrency: usize,
+
+    /// Number of concurrent connections for downloading.
+    #[structopt(long = "downloading-concurrency", default_value = "16")]
+    downloading_concurrency: usize,
 
     /// The prefix to use
     #[structopt(short = "p", long = "prefix")]
@@ -39,14 +43,19 @@ pub async fn main() -> Result<(), Error> {
     // well known urls:
     // - http://archive.ubuntu.com/ubuntu/pool/
     // - http://ddebs.ubuntu.com/ubuntu/pool/
-    println!("concurrency: {}", style(opt.concurrency).yellow());
+    println!("scraping-concurrency: {}", style(opt.scraping_concurrency).yellow());
+    println!("downloading-concurrency: {}", style(opt.downloading_concurrency).yellow());
     println!("prefix: {}", style(&opt.prefix).yellow());
     println!("output: {}", style(&opt.output.display()).yellow());
     println!();
 
-    let pool = ClientPool::new(opt.concurrency);
+    let pool = ClientPool::new(opt.scraping_concurrency);
     let packages = scrape_debian_packages(&pool, opt.urls).await?;
+    drop(pool);
+
+    let pool = ClientPool::new(opt.downloading_concurrency);
     download_packages(&pool, packages, &opt.output, &opt.prefix).await?;
+    drop(pool);
     
     Ok(())
 }

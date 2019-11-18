@@ -11,6 +11,7 @@ use regex::bytes::Regex;
 use reqwest;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::Mutex;
+use tokio::timer::delay_for;
 use url::Url;
 
 use crate::pool::ClientPool;
@@ -29,7 +30,33 @@ enum Link {
 /// Given a URL returns a vector of all links that could be followed.
 async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, Error> {
     let base_url = Url::parse(&url)?;
-    let body = client.get(&url).send().await?.bytes().await?;
+    let mut attempts = 0;
+    let mut last_error = None;
+    let body = loop {
+        attempts += 1;
+        if attempts >= 3 {
+            return Err(last_error.unwrap());
+        }
+
+        let resp = match client.get(&url).send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                delay_for(Duration::from_millis(500)).await;
+                last_error = Some(Error::from(e));
+                continue;
+            }
+        };
+
+        match resp.bytes().await {
+            Ok(body) => break body,
+            Err(e) => {
+                delay_for(Duration::from_millis(500)).await;
+                last_error = Some(Error::from(e));
+                continue;
+            }
+        }
+    };
+
     let mut rv = vec![];
 
     for m in LINK_RE.captures_iter(&body) {

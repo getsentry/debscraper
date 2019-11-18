@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::sync::Arc;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use console::style;
 use reqwest::Client;
