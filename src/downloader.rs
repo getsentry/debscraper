@@ -60,9 +60,9 @@ async fn sort_images(input: &Path, output: &Path, prefix: &str, bundle_id: &str)
         .arg(prefix)
         .arg("--output")
         .arg(output)
+        .arg("--ignore-errors")
+        .arg("-q")
         .arg(input)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .status()?;
     Ok(())
 }
