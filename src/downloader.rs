@@ -68,6 +68,7 @@ async fn sort_images(
         .arg("--output")
         .arg(output)
         .arg("--ignore-errors")
+        .arg("-zz")
         .arg("-q")
         .args(input)
         .status()?;
