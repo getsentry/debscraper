@@ -12,7 +12,7 @@ where
     tokio::spawn(async move {
         match future.await {
             Ok(()) => {}
-            Err(err) => panic!("error: {}", err),
+            Err(err) => eprintln!("task failed: error: {}", err),
         }
     });
 }

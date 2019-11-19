@@ -1,5 +1,6 @@
 use tokio::prelude::*;
 
+use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -22,8 +23,13 @@ lazy_static! {
 
 #[derive(Debug)]
 enum Link {
-    Listing(String),
-    Deb(String),
+    Listing {
+        url: String,
+    },
+    Deb {
+        package: String,
+        download_url: String,
+    },
 }
 
 /// Given a URL returns a vector of all links that could be followed.
@@ -49,11 +55,15 @@ async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, 
             continue;
         }
 
-        let target_url = target_url.to_string();
-        if target_url.ends_with(".deb") || target_url.ends_with(".ddeb") {
-            rv.push(Link::Deb(target_url));
-        } else if target_url.ends_with('/') {
-            rv.push(Link::Listing(target_url));
+        let target_url_s = target_url.to_string();
+        if target_url_s.ends_with(".deb") || target_url_s.ends_with(".ddeb") {
+            let segments = target_url.path_segments().map_or(vec![], |x| x.collect());
+            rv.push(Link::Deb {
+                package: segments[segments.len() - 2].to_string(),
+                download_url: target_url_s,
+            });
+        } else if target_url_s.ends_with('/') {
+            rv.push(Link::Listing { url: target_url_s });
         }
     }
 
@@ -64,7 +74,7 @@ async fn find_links(client: &reqwest::Client, url: String) -> Result<Vec<Link>, 
 pub async fn scrape_debian_packages(
     pool: &ClientPool,
     urls: impl IntoIterator<Item = String>,
-) -> Result<Vec<String>, Error> {
+) -> Result<HashMap<String, Vec<String>>, Error> {
     let mut sources = String::new();
     let (mut tx, mut rx) = unbounded_channel();
     for (idx, url) in urls.into_iter().enumerate() {
@@ -78,7 +88,7 @@ pub async fn scrape_debian_packages(
 
     log_stage!(1, "Fetching archive indexes ({})", sources);
 
-    let archives = Arc::new(Mutex::new(vec![]));
+    let packages = Arc::new(Mutex::new(HashMap::<String, Vec<String>>::new()));
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner().template(" {spinner:.cyan}  {msg:.dim}\n    {prefix}"),
@@ -100,29 +110,39 @@ pub async fn scrape_debian_packages(
             }
         };
         let client = pool.get_client().await;
-        let archives = archives.clone();
+        let packages = packages.clone();
         let pb = pb.clone();
         let mut tx = tx.clone();
         spawn_protected(async move {
             let client = client;
-            let archives = archives.clone();
             let links = find_links(&client, index_url.clone()).await?;
             let mut new_archives = vec![];
             for link in links {
                 match link {
-                    Link::Deb(url) => new_archives.push(url),
-                    Link::Listing(url) => {
+                    Link::Deb {
+                        package,
+                        download_url,
+                    } => {
+                        new_archives.push((package, download_url));
+                    }
+                    Link::Listing { url } => {
                         tx.try_send(url).ok();
                     }
                 }
             }
             pb.set_message(&index_url);
-            let mut archives = archives.lock().await;
+            let mut packages = packages.lock().await;
             pb.set_prefix(&format!(
-                "{} archives found",
-                style(archives.len()).yellow(),
+                "{} packages found",
+                style(packages.len()).yellow(),
             ));
-            archives.extend(new_archives);
+            for (package, download_url) in new_archives {
+                if let Some(a) = packages.get_mut(&package) {
+                    a.push(download_url);
+                } else {
+                    packages.insert(package, vec![download_url]);
+                }
+            }
             drop(client);
             Ok(())
         });
@@ -130,11 +150,11 @@ pub async fn scrape_debian_packages(
 
     pb.finish_and_clear();
     log_result!(
-        "Found {} archives in {}s",
-        style(archives.lock().await.len()).yellow(),
+        "Found {} packages in {}s",
+        style(packages.lock().await.len()).yellow(),
         started.elapsed().as_secs()
     );
 
-    let mut archives = archives.lock().await;
-    Ok(mem::replace(&mut *archives, Default::default()))
+    let mut packages = packages.lock().await;
+    Ok(mem::replace(&mut *packages, Default::default()))
 }

@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use futures_intrusive::sync::Semaphore;
 use reqwest::Client;
-use tokio::sync::Mutex;
 use tokio::{clock, timer};
 
 struct ClientPoolInner {

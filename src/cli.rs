@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
+use chrono::Utc;
 use console::style;
 use structopt::StructOpt;
 
@@ -29,6 +31,10 @@ struct Opt {
     /// The prefix to use
     #[structopt(short = "p", long = "prefix")]
     prefix: String,
+
+    /// Bundle suffix to use
+    #[structopt(long = "bundle-suffix")]
+    bundle_suffix: Option<String>,
 
     /// Where to write the output files
     #[structopt(short = "o", long = "output", default_value = "./output")]
@@ -62,8 +68,15 @@ pub async fn main() -> Result<(), Error> {
     let packages = scrape_debian_packages(&pool, opt.urls).await?;
     drop(pool);
 
+    let bundle_suffix = match opt.bundle_suffix {
+        Some(ref val) => Cow::Borrowed(val.as_str()),
+        None => {
+            let now = Utc::now();
+            Cow::Owned(now.format("%Y-%m-%d").to_string())
+        }
+    };
     let pool = ClientPool::new(opt.downloading_concurrency);
-    download_packages(&pool, packages, &opt.output, &opt.prefix).await?;
+    download_packages(&pool, packages, &opt.output, &opt.prefix, &bundle_suffix).await?;
     drop(pool);
 
     Ok(())
