@@ -40,7 +40,7 @@ async fn unpack_data(ar_contents: &Path) -> Result<TempDir, Error> {
         if let Some("data.tar.xz") | Some("data.tar.gz") | Some("data.tar.bz2") =
             p.file_name().to_str()
         {
-            let status = Command::new("gtar")
+            let status = Command::new("tar")
                 .arg("xf")
                 .arg(p.path())
                 .current_dir(dir.path())
