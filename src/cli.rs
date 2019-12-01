@@ -1,9 +1,11 @@
+use std::fs;
 use std::borrow::Cow;
 use std::path::PathBuf;
 
 use chrono::Utc;
 use console::style;
 use structopt::StructOpt;
+use tempfile::TempDir;
 
 use crate::downloader::download_packages;
 use crate::pool::ClientPool;
@@ -49,6 +51,15 @@ pub async fn main() -> Result<(), Error> {
         return Ok(());
     }
 
+    fs::create_dir_all(&opt.output)?;
+    let tmp_dir = TempDir::new_in(&opt.output)?;
+    let tmp_dir_for_ctrlc = tmp_dir.path().to_owned();
+    ctrlc::set_handler(move || {
+        eprintln!("Interrupted!");
+        fs::remove_dir_all(&tmp_dir_for_ctrlc).ok();
+        std::process::exit(1);
+    })?;
+
     // well known urls:
     // - http://archive.ubuntu.com/ubuntu/pool/
     // - http://ddebs.ubuntu.com/ubuntu/pool/
@@ -78,6 +89,8 @@ pub async fn main() -> Result<(), Error> {
     let pool = ClientPool::new(opt.downloading_concurrency);
     download_packages(&pool, packages, &opt.output, &opt.prefix, &bundle_suffix).await?;
     drop(pool);
+
+    fs::remove_dir_all(&tmp_dir)?;
 
     Ok(())
 }
