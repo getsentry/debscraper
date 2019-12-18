@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use reqwest::Client;
-use tokio::timer::delay_for;
+use tokio::time::delay_for;
 
 pub fn spawn_protected<F>(future: F)
 where

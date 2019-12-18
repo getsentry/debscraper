@@ -12,17 +12,20 @@ regex = "1.3.1"
 lazy_static = "1.4.0"
 indicatif = "0.13.0"
 console = "0.9.1"
-tokio = "0.2.0-alpha.6"
+tokio = { version = "0.2.5", features = ["time", "sync", "macros", "rt-core"] }
 futures-intrusive = "0.2.2"
 futures = "0.3.1"
 reqwest = "0.10.0-alpha.2"
 bb8 = { git = "https://github.com/djc/bb8", branch = "async-await" }
-structopt = "0.3.4"
+structopt = "0.3.5"
 sha1 = "0.6.0"
 tempfile = "3.1.0"
-bytes = "0.4.12"
-chrono = "0.4.9"
+bytes = "0.5.3"
+chrono = "0.4.10"
 ctrlc = "3.1.3"
 
 [profile.release]
 panic = "abort"
+
+[patch.crates-io]
+reqwest = { git = "https://github.com/seanmonstar/reqwest" }

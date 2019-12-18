@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use futures_intrusive::sync::Semaphore;
 use reqwest::Client;
-use tokio::{clock, timer};
+use tokio::time::delay_for;
 
 struct ClientPoolInner {
     semaphore: Semaphore,
@@ -64,7 +64,7 @@ impl ClientPool {
             if self.is_full() {
                 break;
             }
-            timer::delay(clock::now() + Duration::from_millis(100)).await;
+            delay_for(Duration::from_millis(100)).await;
         }
     }
 

@@ -1,5 +1,3 @@
-use tokio::prelude::*;
-
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -10,6 +8,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use regex::bytes::Regex;
 use reqwest;
+use tokio::time::timeout;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::Mutex;
 use url::Url;
@@ -76,14 +75,14 @@ pub async fn scrape_debian_packages(
     urls: impl IntoIterator<Item = String>,
 ) -> Result<HashMap<String, Vec<String>>, Error> {
     let mut sources = String::new();
-    let (mut tx, mut rx) = unbounded_channel();
+    let (tx, mut rx) = unbounded_channel();
     for (idx, url) in urls.into_iter().enumerate() {
         use std::fmt::Write;
         if idx > 0 {
             sources.push_str(", ");
         }
         write!(&mut sources, "{}", style(&url).green())?;
-        tx.try_send(url)?;
+        tx.send(url)?;
     }
 
     log_stage!(1, "Fetching archive indexes ({})", sources);
@@ -97,7 +96,7 @@ pub async fn scrape_debian_packages(
 
     let started = Instant::now();
     loop {
-        let new_item = rx.recv().timeout(Duration::from_millis(100)).await;
+        let new_item = timeout(Duration::from_millis(100), rx.recv()).await;
         let index_url = match new_item {
             Ok(Some(index_url)) => index_url,
             Ok(None) => break,
@@ -112,7 +111,7 @@ pub async fn scrape_debian_packages(
         let client = pool.get_client().await;
         let packages = packages.clone();
         let pb = pb.clone();
-        let mut tx = tx.clone();
+        let tx = tx.clone();
         spawn_protected(async move {
             let client = client;
             let links = find_links(&client, index_url.clone()).await?;
@@ -126,7 +125,7 @@ pub async fn scrape_debian_packages(
                         new_archives.push((package, download_url));
                     }
                     Link::Listing { url } => {
-                        tx.try_send(url).ok();
+                        tx.send(url).ok();
                     }
                 }
             }
